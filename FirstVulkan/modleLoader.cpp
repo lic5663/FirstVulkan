@@ -27,6 +27,9 @@
 #include <set>
 #include <unordered_map>
 
+#define LIMIT_ANGLE 180
+using namespace std;
+
 const int WIDTH = 800;
 const int HEIGHT = 600;
 
@@ -151,6 +154,116 @@ struct UniformBufferObject
 	alignas(16) glm::mat4 proj;
 };
 
+// Defines several possible options for camera movement. Used as abstraction to stay away from window-system specific input methods
+enum Camera_Movement
+{
+	FORWARD,
+	BACKWARD,
+	LEFT,
+	RIGHT
+};
+
+// Default camera values
+const float YAW = -90.0f;
+const float PITCH = 0.0f;
+const float SPEED = 2.5f;
+const float SENSITIVITY = 0.1f;
+const float ZOOM = 45.0f;
+
+class Camera
+{
+public:
+	// Camera Attributes
+	glm::vec3 Position;
+	glm::vec3 Front;
+	glm::vec3 Up;
+	glm::vec3 Right;
+	glm::vec3 WorldUp;
+	// Euler Angles
+	float Yaw;
+	float Pitch;
+	// Camera options
+	float MovementSpeed;
+	float MouseSensitivity;
+	float Zoom;
+
+	// Constructor with vectors
+	Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f), float yaw = YAW, float pitch = PITCH) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM)
+	{
+		Position = position;
+		WorldUp = up;
+		Yaw = yaw;
+		Pitch = pitch;
+		updateCameraVectors();
+	}
+	// Constructor with scalar values
+	Camera(float posX, float posY, float posZ, float upX, float upY, float upZ, float yaw, float pitch) : Front(glm::vec3(0.0f, 0.0f, -1.0f)), MovementSpeed(SPEED), MouseSensitivity(SENSITIVITY), Zoom(ZOOM)
+	{
+		Position = glm::vec3(posX, posY, posZ);
+		WorldUp = glm::vec3(upX, upY, upZ);
+		Yaw = yaw;
+		Pitch = pitch;
+		updateCameraVectors();
+	}
+
+	// Returns the view matrix calculated using Euler Angles and the LookAt Matrix
+	glm::mat4 GetViewMatrix()
+	{
+		return glm::lookAt(Position, Position + Front, Up);
+	}
+
+
+private:
+	// Calculates the front vector from the Camera's (updated) Euler Angles
+	void updateCameraVectors()
+	{
+		// Calculate the new Front vector
+		glm::vec3 front;
+		front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+		front.y = sin(glm::radians(Pitch));
+		front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+		Front = glm::normalize(front);
+		// Also re-calculate the Right and Up vector
+		Right = glm::normalize(glm::cross(Front, WorldUp));  // Normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+		Up = glm::normalize(glm::cross(Right, Front));
+	}
+};
+
+// camera 
+float radius = 5.0f;
+Camera camera(glm::vec3(0.0f, 0.0f, radius));
+float lastX = WIDTH / 2.0f;
+float lastY = HEIGHT / 2.0f;
+bool firstMouse = true;
+
+float angleTheta = 0.0f;
+float anglePi = 0.0f;
+float rollCamX = 0.0f;
+float rollCamY = 0.0f;
+float yawCamX = 0.0f;
+float yawCamZ = 0.0f;
+float deltaAngle = 0.5f;
+bool objChase = false;
+bool repeatInput = false;
+float CameraUpsideRotateAngle = 0.0f;
+float CameraUpsideRotateDelta = 0.5f;
+float zoomDelta = 0.1f;
+
+
+// Teeth value
+float teethScale = 0.1f;
+float downTeethPosZ = 4.0f;
+float downTeethPosZDelta = 0.02f;
+float upsideTeethRotateAngle = 0.0f;
+float downsideTeethRotateAngle = 0.0f;
+float deltaRotateAngle = 0.5f;
+
+// timing
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
+
+
 class HelloTriangleApplication
 {
 public:
@@ -218,6 +331,7 @@ private:
 	std::vector<VkFence> inFlightFences;
 	size_t currentFrame = 0;
 
+
 	bool framebufferResized = false;
 
 	void initWindow()
@@ -230,6 +344,10 @@ private:
 		glfwSetWindowPos(window, 700, 30);
 		//glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+		glfwSetCursorPosCallback(window, mouse_Callback);
+		glfwSetScrollCallback(window, scroll_Callback);
+		//glfwSetKeyCallback(window, keyboard_Callback);
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	}
 
 	static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
@@ -237,6 +355,202 @@ private:
 		auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
 		app->framebufferResized = true;
 	}
+
+	static void mouse_Callback(GLFWwindow* window, double xpos, double ypos)
+	{
+
+	}
+
+	static void scroll_Callback(GLFWwindow* window, double xoffset, double yoffeset)
+	{
+		
+	}
+
+	// 아래의 키보드 콜백은 안쓰도록 한다 (생각보다 키입력간격이 있어서 부드럽지 않다.
+
+	/*
+	static void keyboard_Callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+	{
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+			glfwSetWindowShouldClose(window, true);
+
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !repeatInput)
+		{
+
+			objChase = !objChase;
+			repeatInput = true;
+
+			if (objChase)
+				cout << "obj chase On" << endl;
+			else
+				cout << "obj chase Off" << endl;
+		}
+
+		if (repeatInput && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+		{
+			repeatInput = false;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+		{
+			camera.Zoom += zoomDelta;
+
+			if (camera.Zoom > 50)
+				camera.Zoom = 50;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+		{
+			camera.Zoom -= zoomDelta;
+			if (camera.Zoom < 0)
+				camera.Zoom = 0;
+		}
+
+		// Camera upside rotate
+		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+		{
+			CameraUpsideRotateAngle += CameraUpsideRotateDelta;
+			if (CameraUpsideRotateAngle > 90)
+				CameraUpsideRotateAngle = 90;
+
+			cout << "CameraUpsideAngle : " << CameraUpsideRotateAngle << endl;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+		{
+			CameraUpsideRotateAngle -= CameraUpsideRotateDelta;
+			if (CameraUpsideRotateAngle < -90)
+				CameraUpsideRotateAngle = -90;
+
+			cout << "CameraUpsideAngle : " << CameraUpsideRotateAngle << endl;
+		}
+
+		// upside Teeth rotate key7 : angle -- , key9 : angle ++
+		if (glfwGetKey(window, GLFW_KEY_KP_9) == GLFW_PRESS)
+		{
+			upsideTeethRotateAngle += deltaRotateAngle;
+			if (upsideTeethRotateAngle >= 90)
+				upsideTeethRotateAngle = 90;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_7) == GLFW_PRESS)
+		{
+			upsideTeethRotateAngle -= deltaRotateAngle;
+			if (upsideTeethRotateAngle <= 0)
+				upsideTeethRotateAngle = 0;
+		}
+
+		// downside Teeth rotate key1 : angle -- , key3 : angle ++
+		if (glfwGetKey(window, GLFW_KEY_KP_3) == GLFW_PRESS)
+		{
+			if (downsideTeethRotateAngle < 90)
+			{
+				downsideTeethRotateAngle += deltaRotateAngle;
+				downTeethPosZ -= downTeethPosZDelta;
+			}
+			cout << "angle : " << downsideTeethRotateAngle << ", posZ : " << downTeethPosZ << endl;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS)
+		{
+			if (downsideTeethRotateAngle > 0)
+			{
+				downsideTeethRotateAngle -= deltaRotateAngle;
+				downTeethPosZ += downTeethPosZDelta;
+			}
+			cout << "angle : " << downsideTeethRotateAngle << ", posZ : " << downTeethPosZ << endl;
+
+		}
+
+
+		if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+		{
+			cout << "left_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			angleTheta -= deltaAngle;
+
+			if (angleTheta < -LIMIT_ANGLE)
+			{
+				angleTheta = LIMIT_ANGLE;
+			}
+
+			yawCamX = sin(glm::radians(angleTheta)) * radius;
+			yawCamZ = cos(glm::radians(angleTheta)) * radius;
+
+			camera.Position.x = yawCamX;
+			camera.Position.z = yawCamZ;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+		{
+			cout << "right_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			angleTheta += deltaAngle;
+
+			if (angleTheta > LIMIT_ANGLE)
+			{
+				angleTheta = -LIMIT_ANGLE;
+			}
+
+			yawCamX = sin(glm::radians(angleTheta)) * radius;
+			yawCamZ = cos(glm::radians(angleTheta)) * radius;
+
+			camera.Position.x = yawCamX;
+			camera.Position.z = yawCamZ;
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		{
+			cout << "up_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			anglePi += deltaAngle;
+
+			if (anglePi > (LIMIT_ANGLE))
+			{
+				anglePi = -(LIMIT_ANGLE);
+			}
+
+
+			rollCamX = cos(glm::radians(anglePi)) * radius;
+			rollCamY = sin(glm::radians(anglePi)) * radius;
+
+			camera.Position.y = rollCamY;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		{
+			cout << "down_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			anglePi -= deltaAngle;
+
+			if (anglePi < -(LIMIT_ANGLE))
+			{
+				anglePi = LIMIT_ANGLE;
+			}
+
+
+			rollCamX = cos(glm::radians(anglePi)) * radius;
+			rollCamY = sin(glm::radians(anglePi)) * radius;
+
+			camera.Position.y = rollCamY;
+
+		}
+		
+	}
+	*/
 
 	void initVulkan()
 	{
@@ -270,11 +584,201 @@ private:
 	{
 		while (!glfwWindowShouldClose(window))
 		{
+			processInput(window);
 			glfwPollEvents();
 			drawFrame();
 		}
 
 		vkDeviceWaitIdle(device);
+	}
+
+	void processInput(GLFWwindow* window)
+	{
+
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+			glfwSetWindowShouldClose(window, true);
+
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !repeatInput)
+		{
+
+			objChase = !objChase;
+			repeatInput = true;
+
+			if (objChase)
+				cout << "obj chase On" << endl;
+			else
+				cout << "obj chase Off" << endl;
+		}
+
+		if (repeatInput && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+		{
+			repeatInput = false;
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+		{
+			camera.Zoom += zoomDelta;
+
+			if (camera.Zoom > 50)
+				camera.Zoom = 50;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+		{
+			camera.Zoom -= zoomDelta;
+			if (camera.Zoom < 0)
+				camera.Zoom = 0;
+		}
+
+		// Camera upside rotate
+		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+		{
+			CameraUpsideRotateAngle += CameraUpsideRotateDelta;
+			if (CameraUpsideRotateAngle > 90)
+				CameraUpsideRotateAngle = 90;
+
+			cout << "CameraUpsideAngle : " << CameraUpsideRotateAngle << endl;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+		{
+			CameraUpsideRotateAngle -= CameraUpsideRotateDelta;
+			if (CameraUpsideRotateAngle < -90)
+				CameraUpsideRotateAngle = -90;
+
+			cout << "CameraUpsideAngle : " << CameraUpsideRotateAngle << endl;
+		}
+
+		// upside Teeth rotate key7 : angle -- , key9 : angle ++
+		if (glfwGetKey(window, GLFW_KEY_KP_9) == GLFW_PRESS)
+		{
+			upsideTeethRotateAngle += deltaRotateAngle;
+			if (upsideTeethRotateAngle >= 90)
+				upsideTeethRotateAngle = 90;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_7) == GLFW_PRESS)
+		{
+			upsideTeethRotateAngle -= deltaRotateAngle;
+			if (upsideTeethRotateAngle <= 0)
+				upsideTeethRotateAngle = 0;
+		}
+
+		// downside Teeth rotate key1 : angle -- , key3 : angle ++
+		if (glfwGetKey(window, GLFW_KEY_KP_3) == GLFW_PRESS)
+		{
+			if (downsideTeethRotateAngle < 90)
+			{
+				downsideTeethRotateAngle += deltaRotateAngle;
+				downTeethPosZ -= downTeethPosZDelta;
+			}
+			cout << "angle : " << downsideTeethRotateAngle << ", posZ : " << downTeethPosZ << endl;
+			//
+			//
+			//if (downsideTeethRotateAngle >= 90)
+			//	downsideTeethRotateAngle = 90;
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS)
+		{
+			if (downsideTeethRotateAngle > 0)
+			{
+				downsideTeethRotateAngle -= deltaRotateAngle;
+				downTeethPosZ += downTeethPosZDelta;
+			}
+			cout << "angle : " << downsideTeethRotateAngle << ", posZ : " << downTeethPosZ << endl;
+			/*downsideTeethRotateAngle -= deltaRotateAngle;
+			if (downsideTeethRotateAngle <= 0)
+				downsideTeethRotateAngle = 0;*/
+		}
+
+
+		if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+		{
+			cout << "left_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			angleTheta -= deltaAngle;
+
+			if (angleTheta < -LIMIT_ANGLE)
+			{
+				angleTheta = LIMIT_ANGLE;
+			}
+
+			yawCamX = sin(glm::radians(angleTheta)) * radius;
+			yawCamZ = cos(glm::radians(angleTheta)) * radius;
+
+			camera.Position.x = yawCamX;
+			camera.Position.z = yawCamZ;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+		{
+			cout << "right_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			angleTheta += deltaAngle;
+
+			if (angleTheta > LIMIT_ANGLE)
+			{
+				angleTheta = -LIMIT_ANGLE;
+			}
+
+			yawCamX = sin(glm::radians(angleTheta)) * radius;
+			yawCamZ = cos(glm::radians(angleTheta)) * radius;
+
+			camera.Position.x = yawCamX;
+			camera.Position.z = yawCamZ;
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+		{
+			cout << "up_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			anglePi += deltaAngle;
+
+			if (anglePi > (LIMIT_ANGLE))
+			{
+				anglePi = -(LIMIT_ANGLE);
+			}
+
+
+			rollCamX = cos(glm::radians(anglePi)) * radius;
+			rollCamY = sin(glm::radians(anglePi)) * radius;
+
+			camera.Position.y = rollCamY;
+
+
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+		{
+			cout << "down_key down. ";
+			cout << "Pi :" << anglePi << "  Theta :" << angleTheta << endl;
+
+			anglePi -= deltaAngle;
+
+			if (anglePi < -(LIMIT_ANGLE))
+			{
+				anglePi = LIMIT_ANGLE;
+			}
+
+
+			rollCamX = cos(glm::radians(anglePi)) * radius;
+			rollCamY = sin(glm::radians(anglePi)) * radius;
+
+			camera.Position.y = rollCamY;
+
+		}
+
 	}
 
 	void cleanupSwapChain()
@@ -1476,16 +1980,17 @@ private:
 		UniformBufferObject ubo = {};
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f));
-		model = glm::rotate(model, time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		//model = glm::rotate(model, time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ubo.model = model;
 
 		glm::mat4 view = glm::mat4(1.0f);
-		view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.1f, 0.0f));
+		float CameraAngle = glm::radians(CameraUpsideRotateAngle);
+		view = glm::lookAt(camera.Position, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(sin(CameraAngle), cos(CameraAngle), 0.0f));
 		ubo.view = view;
 
-		glm::mat4 perspective = glm::mat4(1.0f);
-		perspective = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
-		ubo.proj = perspective;
+		glm::mat4 projection = glm::mat4(1.0f);
+		projection = glm::perspective(glm::radians(camera.Zoom), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
+		ubo.proj = projection;
 		ubo.proj[1][1] *= -1; // 이거 안하면 z-buffer(깊이 버퍼)가 정상적으로 안됨. 이유는 모르겠다.
 
 		//glEnable(GL_DEPTH_TEST); // 이게 원래 z-buffer을 사용가능하게 하는건데 현재 여기 넣으면 오류 뜸.
@@ -1828,8 +2333,6 @@ int main()
 		return EXIT_FAILURE;
 	}
 	
-	
-	std::getchar();
 
 	return EXIT_SUCCESS;
 }
