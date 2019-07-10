@@ -30,8 +30,8 @@
 const int WIDTH = 800;
 const int HEIGHT = 600;
 
-const std::string MODEL_PATH = "models/chalet.obj";
-const std::string TEXTURE_PATH = "textures/chalet.jpg";
+const std::string MODEL_PATH = "models/craneo.OBJ";
+const std::string TEXTURE_PATH = "textures/craneo.jpg";
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -227,7 +227,8 @@ private:
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-		glfwSetWindowUserPointer(window, this);
+		glfwSetWindowPos(window, 700, 30);
+		//glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	}
 
@@ -1473,10 +1474,23 @@ private:
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		UniformBufferObject ubo = {};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
-		ubo.proj[1][1] *= -1;
+		glm::mat4 model = glm::mat4(1.0f);
+		model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f));
+		model = glm::rotate(model, time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.model = model;
+
+		glm::mat4 view = glm::mat4(1.0f);
+		view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.1f, 0.0f));
+		ubo.view = view;
+
+		glm::mat4 perspective = glm::mat4(1.0f);
+		perspective = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 100.0f);
+		ubo.proj = perspective;
+		ubo.proj[1][1] *= -1; // 이거 안하면 z-buffer(깊이 버퍼)가 정상적으로 안됨. 이유는 모르겠다.
+
+		//glEnable(GL_DEPTH_TEST); // 이게 원래 z-buffer을 사용가능하게 하는건데 현재 여기 넣으면 오류 뜸.
+
+		
 
 		void* data;
 		vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
@@ -1777,6 +1791,7 @@ private:
 
 		if (!file.is_open())
 		{
+			std::cout << filename << std::endl;
 			throw std::runtime_error("failed to open file!");
 		}
 
@@ -1812,6 +1827,9 @@ int main()
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
+	
+	
+	std::getchar();
 
 	return EXIT_SUCCESS;
 }
